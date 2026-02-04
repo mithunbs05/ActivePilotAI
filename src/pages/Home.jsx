@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import './Home.css';
 
 const Home = () => {
-  const { products, addToCart } = useApp();
+  const { products, addToCart, loading } = useApp();
   const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [sortBy, setSortBy] = useState('featured');
@@ -63,6 +63,17 @@ const Home = () => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
   };
+
+  if (loading) {
+    return (
+      <div className="home-page">
+        <div className="container" style={{ padding: '100px 20px', textAlign: 'center' }}>
+          <div className="loading-spinner" style={{ fontSize: '48px' }}>⏳</div>
+          <h2>Loading products...</h2>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="home-page">

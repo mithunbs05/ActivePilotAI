@@ -21,6 +21,8 @@ const Checkout = () => {
   });
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   if (cart.length === 0 && !orderPlaced) {
     navigate('/cart');
@@ -34,18 +36,31 @@ const Checkout = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setError('');
     
-    const order = placeOrder({
-      address: `${formData.address}, ${formData.city}, ${formData.zipCode}`,
-      paymentMethod: formData.paymentMethod === 'credit-card' 
-        ? `Credit Card ending in ${formData.cardNumber.slice(-4)}`
-        : 'PayPal'
-    });
-    
-    setPlacedOrderId(order.id);
-    setOrderPlaced(true);
+    try {
+      const order = await placeOrder({
+        address: `${formData.address}, ${formData.city}, ${formData.zipCode}`,
+        paymentMethod: formData.paymentMethod === 'credit-card' 
+          ? `Credit Card ending in ${formData.cardNumber.slice(-4)}`
+          : 'PayPal'
+      });
+      
+      if (order) {
+        setPlacedOrderId(order.id);
+        setOrderPlaced(true);
+      } else {
+        setError('Failed to place order. Please try again.');
+      }
+    } catch (err) {
+      setError('Failed to place order. Please try again.');
+      console.error('Order placement error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (orderPlaced) {
@@ -247,8 +262,14 @@ const Checkout = () => {
               )}
             </div>
             
-            <button type="submit" className="place-order-btn">
-              Place Order - ₹{Math.round(getCartTotal() * 1.1).toLocaleString('en-IN')}
+            {error && (
+              <div style={{ color: 'red', marginBottom: '20px', textAlign: 'center' }}>
+                {error}
+              </div>
+            )}
+            
+            <button type="submit" className="place-order-btn" disabled={loading}>
+              {loading ? 'Placing Order...' : `Place Order - ₹${Math.round(getCartTotal() * 1.1).toLocaleString('en-IN')}`}
             </button>
           </form>
           

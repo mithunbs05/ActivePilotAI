@@ -7,25 +7,29 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const { login } = useApp();
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
     
     if (!email || !password) {
       setError('Please fill in all fields');
+      setLoading(false);
       return;
     }
 
-    const success = login(email, password);
+    const success = await login(email, password);
     
     if (success) {
       navigate('/');
     } else {
       setError('Invalid email or password');
     }
+    setLoading(false);
   };
 
   return (
@@ -62,8 +66,8 @@ const Login = () => {
 
             {error && <div className="error-message">{error}</div>}
 
-            <button type="submit" className="login-button">
-              Sign In
+            <button type="submit" className="login-button" disabled={loading}>
+              {loading ? 'Signing In...' : 'Sign In'}
             </button>
           </form>
 

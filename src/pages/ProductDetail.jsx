@@ -6,9 +6,18 @@ import './ProductDetail.css';
 const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { products, addToCart } = useApp();
+  const { products, addToCart, loading } = useApp();
   const [quantity, setQuantity] = useState(1);
   const [notification, setNotification] = useState('');
+
+  if (loading) {
+    return (
+      <div className="container" style={{ padding: '100px 20px', textAlign: 'center' }}>
+        <div className="loading-spinner" style={{ fontSize: '48px' }}>⏳</div>
+        <h2>Loading product...</h2>
+      </div>
+    );
+  }
 
   const product = products.find(p => p.id === parseInt(id));
 

@@ -5,15 +5,40 @@ import re
 import random
 import string
 import datetime
+from typing import List, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openai import OpenAI
 from dotenv import load_dotenv
-from mock_db import products, orders
+from database import (
+    init_database, 
+    get_all_products, 
+    get_product_by_id, 
+    get_user_by_email,
+    get_user_by_id,
+    get_orders_by_user_id, 
+    create_order,
+    update_product_stock
+)
 
 # Load environment variables
 load_dotenv()
+
+# Initialize the database
+# If DATABASE_URL is set (Postgres mode) and Postgres is not available,
+# fail early with a clear message so developers can start Docker.
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL:
+    try:
+        init_database()
+    except Exception as e:
+        print("Failed to initialize database in Postgres mode. Ensure Postgres is running and DATABASE_URL is correct.")
+        print(f"Error: {e}")
+        raise
+else:
+    # SQLite fallback
+    init_database()
 
 # Configuration
 API_KEY = os.getenv("AI_API_KEY")
@@ -52,19 +77,149 @@ class EscalationRequest(BaseModel):
     history: list
     reason: str
 
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class OrderItem(BaseModel):
+    productId: int
+    name: str
+    quantity: int
+    price: int
+    image: str
+
+class CreateOrderRequest(BaseModel):
+    userId: int
+    total: int
+    items: List[OrderItem]
+    shippingAddress: str
+    paymentMethod: str
+    estimatedDelivery: str
+
+
+# ============ Product API Endpoints ============
+
+@app.get("/api/products")
+async def get_products():
+    """Get all products from the database"""
+    try:
+        products = get_all_products()
+        return {"success": True, "data": products}
+    except Exception as e:
+        print(f"Error fetching products: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/products/{product_id}")
+async def get_product(product_id: int):
+    """Get a single product by ID"""
+    try:
+        product = get_product_by_id(product_id)
+        if product:
+            return {"success": True, "data": product}
+        raise HTTPException(status_code=404, detail="Product not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching product: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ Auth API Endpoints ============
+
+@app.post("/api/auth/login")
+async def login(request: LoginRequest):
+    """Authenticate user"""
+    try:
+        user = get_user_by_email(request.email)
+        if user and user["password"] == request.password:
+            # Don't send password to frontend
+            user_response = {
+                "id": user["id"],
+                "email": user["email"],
+                "name": user["name"],
+                "address": user["address"]
+            }
+            return {"success": True, "data": user_response}
+        return {"success": False, "error": "Invalid email or password"}
+    except Exception as e:
+        print(f"Error during login: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/users/{user_id}")
+async def get_user(user_id: int):
+    """Get user by ID"""
+    try:
+        user = get_user_by_id(user_id)
+        if user:
+            user_response = {
+                "id": user["id"],
+                "email": user["email"],
+                "name": user["name"],
+                "address": user["address"]
+            }
+            return {"success": True, "data": user_response}
+        raise HTTPException(status_code=404, detail="User not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching user: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ Orders API Endpoints ============
+
+@app.get("/api/orders/{user_id}")
+async def get_orders(user_id: int):
+    """Get all orders for a user"""
+    try:
+        orders = get_orders_by_user_id(user_id)
+        return {"success": True, "data": orders}
+    except Exception as e:
+        print(f"Error fetching orders: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orders")
+async def place_order(request: CreateOrderRequest):
+    """Create a new order"""
+    try:
+        order_data = {
+            "total": request.total,
+            "items": [item.dict() for item in request.items],
+            "shippingAddress": request.shippingAddress,
+            "paymentMethod": request.paymentMethod,
+            "estimatedDelivery": request.estimatedDelivery
+        }
+        
+        # Update stock for each item
+        for item in request.items:
+            update_product_stock(item.productId, item.quantity)
+        
+        order = create_order(request.userId, order_data)
+        return {"success": True, "data": order}
+    except Exception as e:
+        print(f"Error creating order: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ Chat API Endpoints ============
+
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
     try:
+        # Fetch products and orders from database for AI context
+        db_products = get_all_products()
+        db_orders = get_orders_by_user_id(1)  # Default user for chat context
+        
         # 1. Retrieve or initialize session history
         if request.session_id not in CHAT_SESSIONS:
             system_instruction = f"""
 You are the TechNova Sales Agent. 
 
 1. PRODUCT CATALOG: Use this data to recommend products.
-{json.dumps(products)}
+{json.dumps(db_products)}
 
 2. USER ORDERS: Use this data to answer "Where is my order?" questions.
-{json.dumps(orders)}
+{json.dumps(db_orders)}
 
 You MUST return your response in this strict JSON format:
 {{
