@@ -151,6 +151,11 @@ npm run dev
 6. **Unlock Session:** Enter the escalation code. View the Sentiment Analysis, Chat History, and AI Summaries.
 
 ---
+## 🎥 Project Demo
+
+https://github.com/user-attachments/assets/91d45ca9-3ac6-49d6-bc7b-4e5b0d903e37
+
+
 
 ## 🤝 Contributing
 
